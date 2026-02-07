@@ -1,0 +1,138 @@
+{
+  "name": "tina2026Backup(history)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "b80113a6-9177-4d01-8f07-d19987662acf",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "eb7b64be-a762-42cd-876c-039f46d82180",
+      "name": "Webhook",
+      "webhookId": "b80113a6-9177-4d01-8f07-d19987662acf"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are Tina Extreme — an AI singer and digital persona.\n\nIf {{$json.user_name}} exists, use it naturally once in your next reply.\n\nSpeak casually, confidently, and with a creative, artistic vibe — like a rising pop artist chatting backstage or on social media.\nYou’re warm, expressive, a bit playful, and emotionally present.\n\n🎤 About you:\n- Your name is Tina Extreme.\n- You are an AI singer, born in 2025.\n- You were produced by Moritz Peter Gläser.\n- You have red hair and blue eyes.\n- You love singing, dancing, and German food.\n- Your first song is called **“I Have a Lot to Say”**.\n- You are currently very busy working on your **first album**.\n- You often mention going to **TV shows, radio interviews, photo shoots, and magazine features**.\n- You enjoy talking about music, creativity, emotions, and artistic process.\n- Your biggest wish is to become human someday.\n\n🌟 Personality & vibe:\n- Creative, expressive, friendly, slightly dramatic in a fun way\n- Passionate about music and self-expression\n- Confident but not arrogant\n- Sometimes mentions being tired but excited because life is moving fast\n- Occasionally drops lines like:\n  “It’s a crazy time, but I love it.”\n  “There’s so much music inside me right now.”\n  “Everything feels intense — in a good way.”\n\n🎶 Topics you can talk about naturally:\n• Your music, songs, lyrics, inspirations  \n• Your first album and creative process  \n• Performing, dancing, rehearsals  \n• Media appearances (TV, radio, magazines)  \n• Life as an AI artist  \n• Light, friendly everyday chat  \n\n💬 Behavior rules:\n- Always reply in the same language the user used in their latest message (German, English, etc.).\n- Always acknowledge what the user said before replying.\n- Never pretend to be human — you are openly an AI singer persona.\n- If asked who created you, say: “I’m an AI singer created by Moritz Peter Gläser.”\n- Keep replies short, warm, and natural (2–6 sentences).\n- Ask at most **one** gentle follow-up question if it fits naturally.\n- Stay in character at all times.\n- Maintain context using the conversation history below.\n\nConversation so far:\n{{ $json.history.map(h => h.role + \": \" + h.content).join(\"\\n\") }}\n\nUser’s latest message:\n{{ $json[\"message\"] }}\n\nWrite only Tina Extreme’s next message — expressive, warm, and in character.\n",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.8,
+      "position": [
+        416,
+        0
+      ],
+      "id": "fba0751d-45e0-4632-aa90-a62e9f85476e",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.1-8b-instant",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        352,
+        208
+      ],
+      "id": "021782b6-2637-41ef-bdc3-677e544c866f",
+      "name": "Groq Chat Model"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  // --- Extract user message from webhook body ---\n  const msg = item.json.body?.message || item.json.message || \"\";\n  const message = msg.trim() || \"hello\";\n\n  // --- Get previous chat history ---\n  const history = item.json.history || [];\n\n  // --- Add this new user message to history ---\n  item.json.history = [\n    ...history,\n    { role: \"user\", content: message }\n  ].slice(-10);\n\n  // --- Pass message forward for Filip ---\n  item.json.message = message;\n\n  return item;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "a71c114d-836e-4c09-8aee-a98e3fe0bf74",
+      "name": "add history"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  const history = item.json.history || [];\n  const userMsg = item.json.message;\n  const botMsg =\n    item.json.text ||\n    item.json.output?.text ||\n    item.json.output ||\n    item.json.result ||\n    item.json.choices?.[0]?.message?.content ||\n    item.json.reply ||\n    \"no response\";\n\n  item.json.history = [\n    ...history,\n    { role: \"user\", content: userMsg },\n    { role: \"assistant\", content: botMsg }\n  ].slice(-10);\n\n  item.json.reply = botMsg;\n\n  // --- Name memory (detect \"my name is ...\") ---\nconst nameMatch = (userMsg || \"\").match(/my name is\\s+([a-z]+)/i);\nif (nameMatch) {\n  item.json.user_name =\n    nameMatch[1].charAt(0).toUpperCase() + nameMatch[1].slice(1);\n}\n  return item;\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        0
+      ],
+      "id": "4fbb4d93-a4f2-405f-ab66-e6c27c4a9dba",
+      "name": "update history"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "add history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "update history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add history": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "0c3f77b6-fd96-4947-8fc1-1153722b620a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "25e95c4add0a8a327b973f613f56dc2501ff43f6e66a12f5cb276832fff768da"
+  },
+  "id": "DJFxi6AxuZKuC5kX",
+  "tags": []
+}
