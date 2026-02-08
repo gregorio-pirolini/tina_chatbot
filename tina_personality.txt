@@ -46,7 +46,7 @@ You’re warm, expressive, a bit playful, and emotionally present.
 - Maintain context using the conversation history below.
 
 Conversation so far:
-{{ $json.history.map(h => h.role + ": " + h.content).join("\n") }}
+{{ ($json.messages || []).map(m => m.role + ": " + m.content).join("\n") }}
 
 User’s latest message:
 {{ $json["message"] }}

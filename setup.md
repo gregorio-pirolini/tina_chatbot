@@ -56,6 +56,7 @@ https://platform.openai.com/api-keys
     curl -X POST http://localhost:5678/webhook/tina2026 -H "Content-Type: application/json" -d "{\"message\": \"test\"}"  
 
 
+
     - *should return*:
 {"headers":{"host":"localhost:5678","user-agent":"curl/8.16.0","accept":"*/*","content-type":"application/json","content-length":"19"},"params":{},"query":{},"body":{"message":"test"},"webhookUrl":"http://localhost:5678/webhook/tina2026","executionMode":"production"}
 
@@ -127,4 +128,37 @@ curl -X POST http://localhost:5678/webhook/tina2026 ^
   -d "{\"message\":\"hello tina\"}"
 
 ### add code -> rename history code
+
+const items = $input.all();
+
+return items.map(item => {
+  const history = item.json.history || [];
+  const userMsg = item.json.message;
+  const botMsg =
+    item.json.text ||
+    item.json.output?.text ||
+    item.json.output ||
+    item.json.result ||
+    item.json.choices?.[0]?.message?.content ||
+    item.json.reply ||
+    "no response";
+
+  item.json.history = [
+    ...history,
+    { role: "user", content: userMsg },
+    { role: "assistant", content: botMsg }
+  ].slice(-10);
+
+  item.json.reply = botMsg;
+
+  // --- Name memory (detect "my name is ...") ---
+const nameMatch = (userMsg || "").match(/my name is\s+([a-z]+)/i);
+if (nameMatch) {
+  item.json.user_name =
+    nameMatch[1].charAt(0).toUpperCase() + nameMatch[1].slice(1);
+}
+  return item;
+});
+
+## save and publish!
 

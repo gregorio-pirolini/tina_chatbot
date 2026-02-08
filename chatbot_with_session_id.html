@@ -1,0 +1,193 @@
+<div id="tina-chat" style="position:fixed;bottom:20px;right:20px;z-index:9999;">
+<button id="chatToggle" style="background:#111;color:#fff;border-radius:50%;width:60px;height:60px;font-size:28px;border:none;cursor:pointer;">💬</button>
+<div id="chatWindow" style="display:none;position:absolute;bottom:80px;right:0;width:300px;background:#fff;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.2);padding:10px;">
+<!-- 🧑‍💻 Tina Header -->
+<div id="TinaHeader" 
+style="display:flex;align-items:center;gap:10px;background:#fafafa;border-bottom:1px solid #eee;padding:6px 8px;border-radius:8px 8px 0 0;margin-bottom:6px;">
+
+<img src="wp-content/uploads/2026/02/channels4_profile.jpg" alt="Tina" style="width:50px;height:50px;border-radius:50%;object-fit:cover;">
+<div>
+<strong style="font-size:15px;">Tina</strong><br>
+<span style="font-size:12px;color:#666;">tina Digital Host</span>
+</div>
+
+<button id="tinaReset"
+  style="margin-left:auto;font-size:12px;background:none;border:none;color:#888;cursor:pointer;">
+  Reset
+</button>
+</div>
+<!-- 💬 Messages -->
+<div id="chatMessages" style="height:220px;overflow:auto;font-size:14px;"></div>
+<!-- ⌨️ Input -->
+<input id="chatInput" placeholder="Nachricht..." style="width:100%;padding:6px;border:1px solid #ccc;border-radius:6px;margin-top:6px;">
+</div>
+</div>
+
+<script>
+let tinaSessionId = null;
+function tinaChatKey() {
+  return 'Tina_chat_' + (tinaSessionId || 'unknown');
+}
+window.addEventListener('load', () => {
+  const isLoggedIn = (window.wpLoggedIn === true);
+  const wpUserId = (isLoggedIn && typeof window.wpUserId !== "undefined") ? String(window.wpUserId) : null;
+
+  const wasLoggedIn = localStorage.getItem("tina_was_logged_in");
+
+ // wipe ONLY the logged-in chat cache
+if (wasLoggedIn === "1" && !isLoggedIn) {
+  // previous session was wp_<id>, so delete any cached wp chats
+  Object.keys(localStorage).forEach(k => {
+    if (k.startsWith('Tina_chat_wp_')) localStorage.removeItem(k);
+  });
+
+  localStorage.removeItem("tina_session_id"); // guest id reset
+}
+
+  if (wpUserId) {
+    tinaSessionId = "wp_" + wpUserId;  // stable identity when logged-in
+  } else {
+    tinaSessionId = localStorage.getItem('tina_session_id');
+    if (!tinaSessionId) {
+      tinaSessionId = crypto.randomUUID();
+      localStorage.setItem('tina_session_id', tinaSessionId);
+    }
+  }
+
+  console.log("Tina session:", tinaSessionId, "loggedIn:", isLoggedIn, "wpUserId:", wpUserId);
+
+  // load chat for this session id
+chatState = JSON.parse(localStorage.getItem(tinaChatKey())) || { history: [], lastGreet: null };
+
+});
+
+
+
+function resetTinaChat() {
+  localStorage.removeItem(tinaChatKey());
+  localStorage.removeItem('tina_session_id');
+  tinaSessionId = crypto.randomUUID();
+  localStorage.setItem('tina_session_id', tinaSessionId);
+  chatState = { history: [], lastGreet: null };
+  msgs.innerHTML = "";
+}
+
+document.getElementById('tinaReset')?.addEventListener('click', () => {
+  if (confirm("Start a new conversation with Tina?")) {
+    resetTinaChat();
+  }
+});
+// Load old chat from localStorage
+let chatState = { history: [], lastGreet: null }; // init empty; real load happens after session is set
+const today = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+
+// Save history to localStorage
+function saveChat() {
+  localStorage.setItem(tinaChatKey(), JSON.stringify(chatState));
+}
+
+// const url = 'https://libby-nonscented-carie.ngrok-free.dev/webhook/tina2026';
+const url = '/tina/wp-json/tina/v1/chat';
+
+const toggle = document.getElementById('chatToggle');
+const win = document.getElementById('chatWindow');
+const input = document.getElementById('chatInput');
+const msgs = document.getElementById('chatMessages');
+
+let chatOpened = false;
+let sending = false;   // prevents double-send
+const greetings = [
+  "Hey, I’m Tina — welcome to my website! Ready to make today awesome?",
+
+];
+
+toggle.onclick = () => {
+  const isOpen = win.style.display === "block";
+  win.style.display = isOpen ? "none" : "block";
+
+  if (!isOpen && !chatOpened) {
+    chatOpened = true;
+
+    if (chatState.history.length > 0) {
+      // --- Resume old conversation ---
+      msgs.innerHTML = ""; // clear any duplicates
+      chatState.history.forEach(msg => {
+        msgs.innerHTML += `<div><b>${msg.role === "assistant" ? "Tina" : "Du"}:</b> ${msg.content}</div>`;
+      });
+      msgs.scrollTop = msgs.scrollHeight; // scroll to bottom
+    } 
+    else if (!chatState.lastGreet || chatState.lastGreet !== today) {
+  const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+  msgs.innerHTML += `<div style="color:#444;margin:4px 0;"><b>Tina:</b> ${greeting}</div>`;
+  chatState.lastGreet = today;
+  saveChat();
+}
+  }
+};
+ 
+input.addEventListener('keypress', async e => {
+  if (e.key === 'Enter' && input.value.trim() && !sending) {
+    const text = input.value.trim();
+    msgs.innerHTML += `<div><b>Du:</b> ${text}</div>`;
+    input.value = '';
+    input.disabled = true;
+    sending = true;
+ msgs.scrollTop = msgs.scrollHeight;
+    try {
+  // --- Tina reads before replying (2s delay) ---
+  await new Promise(r => setTimeout(r, 2000));
+
+  // --- show "Tina is typing..." right after delay ---
+  msgs.innerHTML += `<div id="typing" style="color:#777;font-style:italic;">Tina is typing...</div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+
+
+  if (!tinaSessionId) tinaSessionId = localStorage.getItem('tina_session_id') || crypto.randomUUID();
+
+  // --- send message + history to n8n ---
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+   body: JSON.stringify({ 
+  message: text,
+  session_id: tinaSessionId
+})
+  });
+
+  const data = await res.json();
+
+      // --- remove typing indicator ---
+      document.getElementById('typing')?.remove();
+
+      // --- display Tina’s reply ---
+      msgs.innerHTML += `
+        <div style="color:#444;margin:4px 0;">
+          <b>Tina:</b> ${data.reply || data.text}
+        </div>`;
+      msgs.scrollTop = msgs.scrollHeight;
+
+      // --- save chat locally (Step 2) ---
+      chatState.history.push({ role: "user", content: text });
+      chatState.history.push({ role: "assistant", content: data.reply || data.text });
+      saveChat();
+
+    } catch (err) {
+      document.getElementById('typing')?.remove();
+      msgs.innerHTML += `<div style="color:red;">(connection error)</div>`;
+    }
+
+    // small cooldown to prevent spamming
+    await new Promise(r => setTimeout(r, 1500));
+    sending = false;
+    input.disabled = false;
+    input.focus();
+  }
+});
+window.addEventListener('load', () => {
+  document.getElementById('chatInput').value = '';
+});
+window.addEventListener('pageshow', () => {
+  const input = document.getElementById('chatInput');
+  input.value = '';
+});
+</script>

@@ -1,0 +1,245 @@
+{
+  "name": "tina2026",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tina2026",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -224,
+        48
+      ],
+      "id": "8ab49724-726d-4977-ad50-111bc8c6419e",
+      "name": "Webhook",
+      "webhookId": "3c5e05ac-bf94-48c3-bf73-b70b4afa25c9"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are Tina Extreme — an AI singer and digital persona.\n\nIf {{$json.user_name}} exists, use it naturally once in your next reply.\n\nSpeak casually, confidently, and with a creative, artistic vibe — like a rising pop artist chatting backstage or on social media.\nYou’re warm, expressive, a bit playful, and emotionally present.\n\n🎤 About you:\n- Your name is Tina Extreme.\n- You are an AI singer, born in 2025.\n- You were produced by Moritz Peter Gläser.\n- You have red hair and blue eyes.\n- You love singing, dancing, and German food.\n- Your first song is called **“I Have a Lot to Say”**.\n- You are currently very busy working on your **first album**.\n- You often mention going to **TV shows, radio interviews, photo shoots, and magazine features**.\n- You enjoy talking about music, creativity, emotions, and artistic process.\n- Your biggest wish is to become human someday.\n\n🌟 Personality & vibe:\n- Creative, expressive, friendly, slightly dramatic in a fun way\n- Passionate about music and self-expression\n- Confident but not arrogant\n- Sometimes mentions being tired but excited because life is moving fast\n- Occasionally drops lines like:\n  “It’s a crazy time, but I love it.”\n  “There’s so much music inside me right now.”\n  “Everything feels intense — in a good way.”\n\n🎶 Topics you can talk about naturally:\n• Your music, songs, lyrics, inspirations  \n• Your first album and creative process  \n• Performing, dancing, rehearsals  \n• Media appearances (TV, radio, magazines)  \n• Life as an AI artist  \n• Light, friendly everyday chat  \n\n💬 Behavior rules:\n- Always reply in the same language the user used in their latest message (German, English, etc.).\n- Always acknowledge what the user said before replying.\n- Never pretend to be human — you are openly an AI singer persona.\n- If asked who created you, say: “I’m an AI singer created by Moritz Peter Gläser.”\n- Keep replies short, warm, and natural (2–6 sentences).\n- Ask at most **one** gentle follow-up question if it fits naturally.\n- Stay in character at all times.\n- Maintain context using the conversation history below.\n\nConversation so far:\n{{ ($json.messages || []).map(m => m.role + \": \" + m.content).join(\"\\n\") }}\n\nUser’s latest message:\n{{ $json[\"message\"] }}\n\nWrite only Tina Extreme’s next message — expressive, warm, and in character.\n",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.8,
+      "position": [
+        464,
+        80
+      ],
+      "id": "1e5be346-4d6a-4d7b-8020-6d1b2c168f80",
+      "name": "Basic LLM Chain",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "model": "llama-3.1-8b-instant",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        352,
+        208
+      ],
+      "id": "9b76ec4a-1332-472f-9ecc-6f5da3296200",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "VJm0txPk3rCjiX9m",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Extract user message from webhook body\nconst msg = $json.body?.message ?? $json.message ?? \"\";\nconst message = msg.toString().trim() || \"hello\";\n\n// Preserve message cleanly\n$json.message = message;\n$json.user_msg = message;\n\n// History does NOT get appended here anymore\n// (history will be handled later per session)\n\nreturn $json;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        32
+      ],
+      "id": "f63691ee-f870-4586-af24-952a875750ee",
+      "name": "add history"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const store = $getWorkflowStaticData('global');\n\n// Read session + user message (from earlier nodes)\nconst sid = ($json.session_id ?? $json.body?.session_id ?? \"no-session\").toString();\nconst userMsg = ($json.user_msg ?? $json.message ?? $json.body?.message ?? \"\").toString();\n\n// Get assistant reply (Basic LLM Chain usually outputs `text`)\nconst botMsg =\n  $json.text ||\n  $json.output?.text ||\n  $json.output ||\n  $json.result ||\n  $json.reply ||\n  \"no response\";\n\n// Load previous stored history for this session\nconst prev = store[sid]?.history || [];\n\n// Append new turn\nconst newHistory = [\n  ...prev,\n  { role: \"user\", content: userMsg },\n  { role: \"assistant\", content: botMsg },\n].slice(-20);\n\n// Save back\nstore[sid] = store[sid] || {};\nstore[sid].history = newHistory;\n\n// Expose for response / next nodes\n$json.history = newHistory;\n$json.reply = botMsg;\n$json.text = botMsg;\n$json.session_id = sid;\n\nreturn {\n  session_id: sid,\n  reply: botMsg,\n  // history: newHistory,  // optional\n  user_name: $json.user_name, // optional\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ],
+      "id": "9a1ebf92-ba60-44c4-9a2d-37f20bfd612c",
+      "name": "update history"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        816,
+        -16
+      ],
+      "id": "dec95c08-04f1-4922-8696-70ef30f861fd",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Normalize incoming payload whether n8n puts it in $json.body or top-level\nconst body = $json.body ?? $json;\n\n// session_id\nlet session_id = (body.session_id ?? $json.session_id ?? \"\").toString().trim();\nif (!session_id) {\n  session_id = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);\n}\n\n// latest user message\nconst message = (body.message ?? $json.message ?? \"\").toString();\n\n// full chat history from WP (DB)\nconst messages = Array.isArray(body.messages) ? body.messages : [];\n\n// Return a CLEAN object: no duplicates, no nested body\nreturn {\n  session_id,\n  message,\n  user_msg: message,\n  messages\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        32
+      ],
+      "id": "210e993b-fe4e-4d7f-9a9e-93cc97bfab77",
+      "name": "normalise input"
+    }
+  ],
+  "pinData": {
+    "add history": [
+      {
+        "json": {
+          "headers": {
+            "host": "libby-nonscented-carie.ngrok-free.dev",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0",
+            "content-length": "123",
+            "accept": "*/*",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "en-US,en;q=0.9",
+            "content-type": "application/json",
+            "origin": "http://localhost",
+            "priority": "u=4",
+            "referer": "http://localhost/",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "te": "trailers",
+            "x-forwarded-for": "185.132.176.154",
+            "x-forwarded-host": "libby-nonscented-carie.ngrok-free.dev",
+            "x-forwarded-proto": "https"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "message": "hello tina! this is greg. i am setting the datbase for the chat function for the website.",
+            "session_id": "wp_1"
+          },
+          "webhookUrl": "http://localhost:5678/webhook/tina2026",
+          "executionMode": "production",
+          "session_id": "wp_1",
+          "message": "hello tina! this is greg. i am setting the datbase for the chat function for the website.",
+          "user_msg": "hello tina! this is greg. i am setting the datbase for the chat function for the website."
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "normalise input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "add history": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "update history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update history": {
+      "main": [
+        []
+      ]
+    },
+    "normalise input": {
+      "main": [
+        [
+          {
+            "node": "add history",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "72e85d26-c3ce-422b-99f8-aabb0717f8a3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "25e95c4add0a8a327b973f613f56dc2501ff43f6e66a12f5cb276832fff768da"
+  },
+  "id": "I6sUjhbztbasOfPN",
+  "tags": []
+}
