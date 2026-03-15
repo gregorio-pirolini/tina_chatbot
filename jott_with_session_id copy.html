@@ -1,0 +1,201 @@
+<div id="jott-chat" style="position:fixed;bottom:20px;right:20px;z-index:9999;">
+<button id="chatToggle" style="background:#111;color:#fff;border-radius:50%;width:60px;height:60px;font-size:28px;border:none;cursor:pointer;">💬</button>
+<div id="chatWindow" style="display:none;position:absolute;bottom:80px;right:0;width:300px;background:#fff;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.2);padding:10px;">
+<!-- 🧑‍💻 jott Header -->
+<div id="jottHeader" 
+style="display:flex;align-items:center;gap:10px;background:#fafafa;border-bottom:1px solid #eee;padding:6px 8px;border-radius:8px 8px 0 0;margin-bottom:6px;">
+
+<img src="../wp-content/uploads/2026/02/jott.jpg" alt="Tomi" style="width:50px;height:50px;border-radius:50%;object-fit:cover;">
+<div>    
+<strong style="font-size:15px;">Tomi</strong><br>
+<span style="font-size:12px;color:#666;">Jott P. M. Digital Host</span>
+</div>
+
+<button id="jottReset"
+  style="margin-left:auto;font-size:12px;background:none;border:none;color:#888;cursor:pointer;">
+  Reset
+</button>
+</div>
+<!-- 💬 Messages -->
+<div id="chatMessages" style="height:220px;overflow:auto;font-size:14px;"></div>
+<!-- ⌨️ Input -->
+<input id="chatInput" placeholder="Nachricht..." style="width:100%;padding:6px;border:1px solid #ccc;border-radius:6px;margin-top:6px;">
+</div>
+</div>
+
+<script>
+let jottSessionId = null;
+function jottChatKey() {
+  return 'jott_chat_' + (jottSessionId || 'unknown');
+}
+window.addEventListener('load', () => {
+  const isLoggedIn = (window.wpLoggedIn === true);
+  const wpUserId = (isLoggedIn && typeof window.wpUserId !== "undefined") ? String(window.wpUserId) : null;
+
+  const wasLoggedIn = localStorage.getItem("jott_was_logged_in");
+
+ // wipe ONLY the logged-in chat cache
+if (wasLoggedIn === "1" && !isLoggedIn) {
+  // previous session was wp_<id>, so delete any cached wp chats
+  Object.keys(localStorage).forEach(k => {
+    if (k.startsWith('jott_chat_wp_')) localStorage.removeItem(k);
+  });
+
+  localStorage.removeItem("jott_session_id"); // guest id reset
+}
+
+  if (wpUserId) {
+    jottSessionId = "wp_" + wpUserId;  // stable identity when logged-in
+  } else {
+    jottSessionId = localStorage.getItem('jott_session_id');
+    if (!jottSessionId) {
+      jottSessionId = crypto.randomUUID();
+      localStorage.setItem('jott_session_id', jottSessionId);
+    }
+  }
+
+  console.log("jott session:", jottSessionId, "loggedIn:", isLoggedIn, "wpUserId:", wpUserId);
+
+  // load chat for this session id
+chatState = JSON.parse(localStorage.getItem(jottChatKey())) || { history: [], lastGreet: null };
+
+});
+
+
+
+function resetjottChat() {
+  localStorage.removeItem(jottChatKey());
+  localStorage.removeItem('jott_session_id');
+  jottSessionId = crypto.randomUUID();
+  localStorage.setItem('jott_session_id', jottSessionId);
+  chatState = { history: [], lastGreet: null };
+  msgs.innerHTML = "";
+}
+
+document.getElementById('jottReset')?.addEventListener('click', () => {
+  if (confirm("Start a new conversation with Tomi?")) {
+    resetjottChat();
+  }
+});
+// Load old chat from localStorage
+let chatState = { history: [], lastGreet: null }; // init empty; real load happens after session is set
+const today = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+
+// Save history to localStorage
+function saveChat() {
+  localStorage.setItem(jottChatKey(), JSON.stringify(chatState));
+}
+
+// const url = 'https://libby-nonscented-carie.ngrok-free.dev/webhook/jott2026';
+const url = '/tina/wp-json/jott/v1/chat';
+
+const toggle = document.getElementById('chatToggle');
+const win = document.getElementById('chatWindow');
+const input = document.getElementById('chatInput');
+const msgs = document.getElementById('chatMessages');
+
+let chatOpened = false;
+let sending = false;   // prevents double-send
+const greetings = [
+  "Hey, ich bin Tomi — willkommen in meiner kleinen Siebdruck-Oase! Lust, heute was Schönes zu drucken?",
+  "Hallo du! Tomi hier 😊 Schön, dass du vorbeischaust. Kaffee ist schon durch, setz dich!",
+  "Servus! Ich bin Tomi, dein digitaler Begrüßungs-Typ bei Jott P. M. Was führt dich heute her?",
+  "Hey hey! Tomi am Start — willkommen im Weißenseer Druck-Paradies. Lust auf Farbe und Kreativität?",
+  "Moin moin! Ich bin Tomi. Schön dich hier zu sehen — schnapp dir ’nen virtuellen Kaffee und erzähl mal!",
+  "Hallo! Tomi meldet sich aus der Werkstatt. Bereit für ein bisschen Siebdruck-Magie heute?",
+  "Grüß dich! Ich bin Tomi — dein entspannter Host bei Jott P. M. Was geht ab bei dir?",
+  "Hey, willkommen! Tomi hier mit guter Laune und (virtuellen) Keksen. Was kann ich für dich tun?",
+  "Hi, ich bin Tomi! Schön, dass du da bist — lass uns quatschen, drucken oder einfach nur chillen ☕",
+  "Ahoi! Tomi grüßt aus Berlin-Weißensee. Lust, ein bisschen kreativ zu werden?"
+];
+
+toggle.onclick = () => {
+  const isOpen = win.style.display === "block";
+  win.style.display = isOpen ? "none" : "block";
+
+  if (!isOpen && !chatOpened) {
+    chatOpened = true;
+
+    if (chatState.history.length > 0) {
+      // --- Resume old conversation ---
+      msgs.innerHTML = ""; // clear any duplicates
+      chatState.history.forEach(msg => {
+        msgs.innerHTML += `<div><b>${msg.role === "assistant" ? "Tomi" : "Du"}:</b> ${msg.content}</div>`;
+      });
+      msgs.scrollTop = msgs.scrollHeight; // scroll to bottom
+    } 
+    else if (!chatState.lastGreet || chatState.lastGreet !== today) {
+  const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+  msgs.innerHTML += `<div style="color:#444;margin:4px 0;"><b>jott:</b> ${greeting}</div>`;
+  chatState.lastGreet = today;
+  saveChat();
+}
+  }
+};
+ 
+input.addEventListener('keypress', async e => {
+  if (e.key === 'Enter' && input.value.trim() && !sending) {
+    const text = input.value.trim();
+    msgs.innerHTML += `<div><b>Du:</b> ${text}</div>`;
+    input.value = '';
+    input.disabled = true;
+    sending = true;
+ msgs.scrollTop = msgs.scrollHeight;
+    try {
+  // --- jott reads before replying (2s delay) ---
+  await new Promise(r => setTimeout(r, 2000));
+
+  // --- show "jott is typing..." right after delay ---
+  msgs.innerHTML += `<div id="typing" style="color:#777;font-style:italic;">jott is typing...</div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+
+
+  if (!jottSessionId) jottSessionId = localStorage.getItem('jott_session_id') || crypto.randomUUID();
+
+  // --- send message + history to n8n ---
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+   body: JSON.stringify({ 
+  message: text,
+  session_id: jottSessionId
+})
+  });
+
+  const data = await res.json();
+
+      // --- remove typing indicator ---
+      document.getElementById('typing')?.remove();
+
+      // --- display jott’s reply ---
+      msgs.innerHTML += `
+        <div style="color:#444;margin:4px 0;">
+          <b>jott:</b> ${data.reply || data.text}
+        </div>`;
+      msgs.scrollTop = msgs.scrollHeight;
+
+      // --- save chat locally (Step 2) ---
+      chatState.history.push({ role: "user", content: text });
+      chatState.history.push({ role: "assistant", content: data.reply || data.text });
+      saveChat();
+
+    } catch (err) {
+      document.getElementById('typing')?.remove();
+      msgs.innerHTML += `<div style="color:red;">(connection error)</div>`;
+    }
+
+    // small cooldown to prevent spamming
+    await new Promise(r => setTimeout(r, 1500));
+    sending = false;
+    input.disabled = false;
+    input.focus();
+  }
+});
+window.addEventListener('load', () => {
+  document.getElementById('chatInput').value = '';
+});
+window.addEventListener('pageshow', () => {
+  const input = document.getElementById('chatInput');
+  input.value = '';
+});
+</script>
