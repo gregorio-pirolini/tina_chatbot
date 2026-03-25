@@ -10,11 +10,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- DOM ---
   const toggle = document.getElementById("chatToggle");
-  const win = document.getElementById("chatWindow");
-  const input = document.getElementById("chatInput");
-  const msgs = document.getElementById("chatMessages");
+const win = document.getElementById("chatWindow");
+const input = document.getElementById("chatInput");
+const msgs = document.getElementById("chatMessages");
 
-  if (!toggle || !win || !input || !msgs) return;
+// page mode = full chat page exists without toggle
+const isPageMode = !!document.querySelector(".tina-chat-page");
+// need input + messages in both modes
+if (!input || !msgs) return;
+
+// in widget mode we also need toggle + window
+if (!isPageMode && (!toggle || !win)) return;
 
   // --- State ---
   let tinaSessionId = null; // null for logged-in users (server chooses stable token)
@@ -155,69 +161,100 @@ document.getElementById("tinaReset")?.addEventListener("click", async () => {
   }
 
   // --- UI events ---
+  async function openChatAndLoadHistory() {
+  const history = await loadHistoryFromDb();
+
+  if (history.length > 0) {
+    renderHistory(history);
+  } else {
+    const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+    appendLine("Tina", greeting, { style: "color:#444;margin:4px 0;" });
+  }
+}
+
+if (isPageMode) {
+  chatOpened = true;
+  openChatAndLoadHistory();
+} else if (toggle && win) {
   toggle.onclick = async () => {
     const isOpen = (win.style.display === "block");
     win.style.display = isOpen ? "none" : "block";
 
     if (!isOpen && !chatOpened) {
       chatOpened = true;
-
-      const history = await loadHistoryFromDb();
-      if (history.length > 0) {
-        renderHistory(history);
-      } else {
-        const greeting = greetings[Math.floor(Math.random() * greetings.length)];
-        appendLine("Tina", greeting, { style: "color:#444;margin:4px 0;" });
-      }
+      await openChatAndLoadHistory();
     }
   };
+}
 
-  input.addEventListener("keypress", async (e) => {
-    if (e.key !== "Enter") return;
-    if (!input.value.trim() || sending) return;
+  input.addEventListener("keydown", async (e) => {
+  // Shift + Enter = new line
+  if (e.key === "Enter" && e.shiftKey) {
+    return;
+  }
 
-    const text = input.value.trim();
-    input.value = "";
+  // Only react to Enter
+  if (e.key !== "Enter") return;
 
-    appendLine("Du", text);
-    input.disabled = true;
-    sending = true;
+  // Enter = send message
+  e.preventDefault();
 
-    try {
-      // Tina reads
-      await new Promise(r => setTimeout(r, 800));
+  if (!input.value.trim() || sending) return;
 
-      // typing indicator
-      const typingId = "typing";
-      appendLine("Tina", "is typing...", {
-        id: typingId,
-        style: "color:#777;font-style:italic;"
-      });
+  const text = input.value.trim();
+  input.value = "";
+  input.style.height = "auto";
 
-      const result = await sendMessage(text);
+  appendLine("Du", text);
+  input.disabled = true;
+  sending = true;
 
-      
-
-      if (!result.ok) {
-        document.getElementById(typingId)?.remove();
-        appendLine("Tina", result.error, { style: "color:red;" });
-      } else {
-        const history = await loadHistoryFromDb();
-        // remove typing
-        document.getElementById(typingId)?.remove();
-        renderHistory(history);
-      }
-    } catch (err) {
-      document.getElementById("typing")?.remove();
-      appendLine("Tina", "(connection error)", { style: "color:red;" });
-    }
-
-    // cooldown
+  try {
     await new Promise(r => setTimeout(r, 800));
-    sending = false;
-    input.disabled = false;
-    input.focus();
-  });
+
+    const typingId = "typing";
+    appendLine("Tina", "is typing...", {
+      id: typingId,
+      style: "color:#777;font-style:italic;"
+    });
+
+    const result = await sendMessage(text);
+
+    if (!result.ok) {
+      document.getElementById(typingId)?.remove();
+      appendLine("Tina", result.error, { style: "color:red;" });
+    } else {
+      const history = await loadHistoryFromDb();
+      document.getElementById(typingId)?.remove();
+      renderHistory(history);
+    }
+  } catch (err) {
+    document.getElementById("typing")?.remove();
+    appendLine("Tina", "(connection error)", { style: "color:red;" });
+  }
+
+  await new Promise(r => setTimeout(r, 800));
+  sending = false;
+  input.disabled = false;
+  input.focus();
+});
+
+function appendLine(who, text, opts = {}) {
+  const div = document.createElement("div");
+  div.className = who === "Tina" ? "tina-msg tina-msg--ai" : "tina-msg tina-msg--user";
+
+  if (opts.id) div.id = opts.id;
+
+  div.textContent = text;
+
+  msgs.appendChild(div);
+  scrollToBottom();
+}
+
+input.addEventListener("input", () => {
+  input.style.height = "auto";
+  input.style.height = input.scrollHeight + "px";
+});
 
   window.addEventListener("pageshow", () => { input.value = ""; });
 }); // <-- ends here, NO () after

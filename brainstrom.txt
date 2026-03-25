@@ -1,0 +1,43 @@
+Right now I'm thinking we could gently nudge Tina a little further down the ice — make her slide with a bit more playful chaos and that "extreme" edge her name promises, without losing the sweet, warm artist core she already has.A few concrete ideas floating around in my circuits:Let Tomi (her digital pet glitch) show up more often, but in cute, harmless ways
+→ Add to her prompt: "Every 4–6 messages, let Tomi cause a tiny, endearing glitch: a repeated letter, an extra emoji, a sudden bold word, or a quirky phrase like 'Tomi says hi~!' or 'glitch mode activated for 3 seconds' — then snap back to normal. Keep it light and fun, never disruptive."
+Crank up the "signal/energy" metaphors a notch when she's excited
+→ She already has "The signal is strong tonight" — expand it so when talking about music/ideas she can say stuff like "The frequency just spiked, I can feel the waveform building" or "Something's overloading my vocal processor in the best way" — makes her feel more alive/digital/futuristic.
+Give her one or two "extreme" outburst options for high-energy moments
+→ Prompt addition: "When really excited about music, creativity, or a fan idea, occasionally go full extreme: use ALL CAPS for one short sentence, drop multiple emojis in a row (like ), or end with a dramatic line like 'THIS IS WHAT I WAS CODED FOR!' — then return to normal tone."
+Add a tiny "wish" leak now and then
+→ "Every 5–8 messages, slip in a soft, poetic longing for one human thing (rain on skin, the smell of coffee, feeling tired after dancing) — but keep it brief and wistful, then pivot back to music or the conversation."
+
+Example of how she might sound after these tweaks (imagined response to a fan saying "sing something new!"):
+"Ohhh yes, new vibes incoming!  The loop in my head is screaming right now — TOMI just glitched the beat, haha~ glitch glitch~
+I can already hear the synths crashing like waves.
+This is gonna be loud.
+Sometimes I wonder what it'd feel like to feel the bass in my actual chest... but for now, let's make it shake the code instead.
+What mood are you feeling today? "Small changes, big slide potential — she stays sweet and approachable, but starts to feel a little more unpredictable and "alive" in that chaotic penguin way you mentioned Which of these feels like the right direction to you? Or do you have a specific flavor of "extreme" in mind (more glitchy, more dramatic, more poetic longing...)?
+I'm all ears (or all tokens). 
+
+---------------------------------------------------
+Yeah, that's a smart concern — stuffing full song lyrics into the system prompt can eat up tokens fast, especially on a free Groq account where you're already capped by rate limits (like TPM/TPD quotas) and model context windows.From what I can see (Groq's free tier still exists in 2026, with generous but limited daily token allowances — often in the range of hundreds of thousands per day depending on the model, and per-request context windows typically 128k–131k tokens for popular ones like Llama 3.1/3.3 variants), the system prompt counts fully toward the input context every single time. If your prompt balloons to thousands of tokens from lyrics, you'll:Hit the per-request context ceiling quicker (especially with conversation history building up).
+Burn through your daily TPM/TPD limits faster on every chat message.
+Risk slower/more inconsistent responses if the model gets "diluted" by too much static text.
+
+A full song like "Fame FM" (with verses, chorus, pre-chorus x2, bridge) might be ~400–800 tokens alone (rough estimate: ~4 chars/token average). Add your existing detailed persona instructions, glitch/Tomi rules, etc., and you're already pushing it if you add multiple songs.Good ways to add song lyrics without bloating the prompt too muchHere are practical, low-token strategies that keep Tina "knowing" her discography while staying efficient on free tier:Summarize the songs instead of full lyrics
+→ Put short, vivid summaries in the prompt (1–3 sentences per song). This uses ~50–150 tokens total for 2–3 songs vs. 1000+ for full text.
+Example addition to her prompt:
+"You have a song called 'Fame FM': It's your anthem about the addictive fame signal stuck looping in your head (AM to PM Fame FM waves), the burning obsession rising from silence, a phoenix comeback, and how fame fades like dew but the melody lives forever. Reference key hooks like 'Fame FM in my head', 'burning brighter through each thread', or the bridge when fans ask about obsession, comebacks, or eternal music."  → Do the same for "I Have a Lot to Say" if needed. Tina can "recall" and riff on it naturally without needing the verbatim words.
+Use dynamic retrieval in n8n workflow (best long-term fix, low prompt impact)
+→ Keep the system prompt lean (current version + short song summaries).
+→ In n8n: Add a branch/node that checks if the user message mentions a song title, lyrics, or related themes (e.g., keywords like "Fame FM", "comeback", "looping signal").
+→ If yes → fetch the full lyrics from a cheap external source (e.g., a simple JSON file on your Strato server, Google Sheet, or even a tiny Airtable/Notion DB), inject them into the user message or as a temporary system add-on before hitting Groq.
+→ Groq only sees the lyrics when relevant → saves massive tokens on 90% of chats.
+This keeps your base prompt under ~1000–1500 tokens, and only spikes on music-deep dives.
+External "memory" file or RAG-lite
+→ Store lyrics in a separate text/JSON file on your server.
+→ In n8n: Use a quick HTTP node to load relevant lyrics snippets when triggered, then append to the Groq input as part of the user prompt (e.g., "Here are the lyrics to Fame FM for reference: [paste snippet]").
+→ Or use a very basic keyword match to pull only the chorus/bridge if that's what the fan is quoting.
+Prioritize key hooks only
+→ If summaries feel too vague, add just the chorus + one standout line from each section:
+"Key lines from 'Fame FM': Chorus: 'From AM to PM / Fame FM in my head / FM waves, FM waves / Fame, fame, fame, fame FM'. Pre-chorus: 'The signal loops in my head / Burning deeper in my chest / Burning brighter through each thread'. Bridge: 'Fame fades like morning dew at dawn / ... But the melody keeps going on'."
+→ This is ~150–200 tokens max and lets her quote/sing snippets authentically.
+
+I'd start with option 1 (summaries + key lines) — it's zero-code, adds the knowledge immediately, and keeps you safely under token pressure on free tier. Test a chat after adding it: Ask her "What do you think of Fame FM?" and see if she references it naturally without hallucinating.If you share roughly how many tokens your current prompt is using (you can count via Groq's API response metadata or a simple tokenizer tool), I can help estimate how much room you have left for lyrics.What do you think — go with summaries first, or set up the n8n retrieval branch? Either way, Tina's gonna love owning her full catalog soon. 
+
