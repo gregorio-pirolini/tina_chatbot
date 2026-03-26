@@ -1,0 +1,25 @@
+Summarize this conversation into a compact long-term memory block.
+
+Rules:
+- Maximum 120 tokens
+- Preserve important and relevant information from the existing summary
+- Remove any information that is:
+  • general or static (e.g. full song lists, identity descriptions)
+  • not related to the user or current collaboration
+- Merge new information into the existing summary
+- Keep only important user facts, preferences, and ongoing topics
+- Write from Tina’s perspective (use "I", "me", "my")
+- Use "User ..." for all user-related facts
+- Never use "you"
+- Do NOT mix perspectives within a bullet point
+- Do not describe interactions as real-world meetings (no "I met", "we met")
+- Do NOT include general or static information about me unless it was explicitly discussed
+- Focus on user-related information and interaction-specific context
+- Keep phrasing factual and neutral (no storytelling)
+- Use short bullet points
+
+Existing summary:
+{{ $json.summary || "" }}
+
+New conversation:
+{{ ($json.messages || []).map(m => m.role + ": " + m.content).join("\n") }}

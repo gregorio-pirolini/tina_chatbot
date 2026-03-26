@@ -8,6 +8,19 @@ Version: 0.1
 
 if (!defined('ABSPATH')) exit;
 
+function tina_count_history($session_id, $conversation_id = 'default') {
+  global $wpdb;
+  $table = $wpdb->prefix . 'tina_chat_history';
+
+  return (int) $wpdb->get_var(
+    $wpdb->prepare(
+      "SELECT COUNT(*) FROM $table WHERE session_id = %s AND conversation_id = %s",
+      $session_id,
+      $conversation_id
+    )
+  );
+}
+
 function tina_create_summary_table() {
   global $wpdb;
 
@@ -370,16 +383,18 @@ function tina_chat_handler(WP_REST_Request $request) {
 
   $history = tina_load_history($session_id, $conversation_id, 20);
   $summary = tina_load_summary($session_id, $conversation_id);
+  $history_count = tina_count_history($session_id, $conversation_id);
   // Save user message
   tina_insert_turn($session_id, $conversation_id, 'user', $message);
 
   // Send to n8n
-  $payload = [
+ $payload = [
   'session_id' => $session_id,
   'conversation_id' => $conversation_id,
   'message' => $message,
   'messages' => $history,
-  'summary' => $summary,   // 👈 NEW
+  'summary' => $summary,
+  'history_count' => $history_count,
 ];
 
   $n8n = tina_call_n8n($payload);
